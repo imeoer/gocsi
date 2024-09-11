@@ -2,7 +2,6 @@ package gocsi
 
 import (
 	"strconv"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
@@ -11,8 +10,6 @@ import (
 	csictx "github.com/rexray/gocsi/context"
 	"github.com/rexray/gocsi/middleware/logging"
 	"github.com/rexray/gocsi/middleware/requestid"
-	"github.com/rexray/gocsi/middleware/serialvolume"
-	"github.com/rexray/gocsi/middleware/serialvolume/etcd"
 	"github.com/rexray/gocsi/middleware/specvalidator"
 	"github.com/rexray/gocsi/utils"
 )
@@ -26,7 +23,6 @@ func (sp *StoragePlugin) initInterceptors(ctx context.Context) {
 		withReqLogging         = sp.getEnvBool(ctx, EnvVarReqLogging)
 		withRepLogging         = sp.getEnvBool(ctx, EnvVarRepLogging)
 		withDisableLogVolCtx   = sp.getEnvBool(ctx, EnvVarLoggingDisableVolCtx)
-		withSerialVol          = sp.getEnvBool(ctx, EnvVarSerialVolAccess)
 		withSpec               = sp.getEnvBool(ctx, EnvVarSpecValidation)
 		withStgTgtPath         = sp.getEnvBool(ctx, EnvVarRequireStagingTargetPath)
 		withVolContext         = sp.getEnvBool(ctx, EnvVarRequireVolContext)
@@ -189,34 +185,6 @@ func (sp *StoragePlugin) initInterceptors(ctx context.Context) {
 	if _, ok := csictx.LookupEnv(ctx, EnvVarPluginInfo); ok {
 		log.Debug("enabled GetPluginInfo interceptor")
 		sp.Interceptors = append(sp.Interceptors, sp.getPluginInfo)
-	}
-
-	if withSerialVol {
-		var (
-			opts   []serialvolume.Option
-			fields = map[string]interface{}{}
-		)
-
-		// Get serial provider's timeout.
-		if v, _ := csictx.LookupEnv(
-			ctx, EnvVarSerialVolAccessTimeout); v != "" {
-			if t, err := time.ParseDuration(v); err == nil {
-				fields["serialVol.timeout"] = t
-				opts = append(opts, serialvolume.WithTimeout(t))
-			}
-		}
-
-		// Check for etcd
-		if csictx.Getenv(ctx, EnvVarSerialVolAccessEtcdEndpoints) != "" {
-			p, err := etcd.New(ctx, "", 0, nil)
-			if err != nil {
-				log.Fatal(err)
-			}
-			opts = append(opts, serialvolume.WithLockProvider(p))
-		}
-
-		sp.Interceptors = append(sp.Interceptors, serialvolume.New(opts...))
-		log.WithFields(fields).Debug("enabled serial volume access")
 	}
 
 	return
